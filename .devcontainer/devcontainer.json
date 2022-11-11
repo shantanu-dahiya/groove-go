@@ -1,0 +1,11 @@
+{
+    "name": "Groove Go",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "extensions": [
+        "golang.Go",
+        "plex.vscode-protolint",
+        "zxh404.vscode-proto3"
+    ],
+}

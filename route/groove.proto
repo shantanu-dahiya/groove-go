@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+option go_package = ".;route";
+
+service Client {
+  rpc SymmetricKeyGen (SymmetricKeyGenRequest) returns (SymmetricKeyGenResponse) {}
+}
+
+message SymmetricKeyGenRequest {
+    int32 client_id = 1;
+    bytes public_key = 2;
+}
+
+message SymmetricKeyGenResponse {
+    bytes public_key = 1;
+}
+
+service Server {
+    rpc CircuitSetup (CircuitSetupRequest) returns (CircuitSetupResponse) {}
+    rpc FetchPublicKey (FetchPublicKeyRequest) returns (FetchPublicKeyResponse) {}
+}
+
+message CircuitSetupRequest {
+    bytes message = 1;
+    int32 tag = 2;
+}
+  
+message CircuitSetupResponse {
+    bytes message = 1;
+}
+
+message FetchPublicKeyRequest {
+}
+  
+message FetchPublicKeyResponse {
+    bytes public_key = 1;
+}
