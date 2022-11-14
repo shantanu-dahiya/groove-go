@@ -7,5 +7,5 @@
         "golang.Go",
         "plex.vscode-protolint",
         "zxh404.vscode-proto3"
-    ],
+    ]
 }

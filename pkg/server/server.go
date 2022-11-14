@@ -78,6 +78,7 @@ func (s *server) CircuitSetup(ctx context.Context, req *pb.CircuitSetupRequest) 
 		}
 		returnData = res.Message
 	} else {
+		fmt.Printf("Dead drop received at endpoint: %s\n", string(cfd.Data))
 		returnData = cfd.Data // should contain dead drop ID
 	}
 
@@ -121,19 +122,19 @@ func main() {
 		println("Could not parse port number: %v", err)
 	}
 
-	s, err := server.g.FetchServerByPort(port)
+	server.s, err = server.g.FetchServerByPort(port)
 	if err != nil {
 		log.Fatalf("Failed to fetch server with port %d: %v", port, err)
 	}
 
 	// Start server
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.Host, s.Port))
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", server.s.Host, server.s.Port))
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 	svr := grpc.NewServer()
 	pb.RegisterServerServer(svr, &server)
-	log.Printf("Server %d listening at %v", s.Id, lis.Addr())
+	log.Printf("Server %d listening at %v", server.s.Id, lis.Addr())
 
 	svr.Serve(lis)
 }

@@ -60,11 +60,11 @@ func (c *client) setUpCircuits(ctx context.Context) {
 
 	for _, b := range c.buddies {
 		for _, circuit := range b.Circuits {
-			fmt.Println(circuit)
-			firstHop = circuit[0]
+			log.Printf("Working on circuit %s for buddy %d of client %d", circuit.Print(), b.Id, c.c.Id)
+			firstHop = (*circuit)[0]
 
 			// Fetch public keys and derive symmetric keys for each server
-			for _, e := range circuit {
+			for _, e := range *circuit {
 				server, serverConn := e.Server.Dial()
 
 				pkRes, err := server.FetchPublicKey(ctx, &pb.FetchPublicKeyRequest{})
@@ -97,7 +97,7 @@ func (c *client) setUpCircuits(ctx context.Context) {
 				log.Fatalf("Could not decrypt circuit setup return %d: %v", c.c.Id, err)
 			}
 
-			log.Printf("Sent dead drop: %s, Recd dead drop: %s", b.DeadDrop, returnedDeadDrop)
+			log.Printf("Client %d: Sent dead drop: %s, Recd dead drop: %s", c.c.Id, b.DeadDrop, returnedDeadDrop)
 		}
 	}
 }
@@ -156,7 +156,8 @@ func main() {
 		}
 		conn.Close()
 
-		client.addBuddy(client.c.Id, crypt.UnmarshalPublicKey(res.PublicKey))
+		// Add client 1 as buddy
+		client.addBuddy(1, crypt.UnmarshalPublicKey(res.PublicKey))
 	}
 
 	go s.Serve(lis)

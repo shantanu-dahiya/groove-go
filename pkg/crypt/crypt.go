@@ -1,7 +1,9 @@
 package crypt
 
 import (
+	"bytes"
 	"crypto/aes"
+	"crypto/cipher"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -50,33 +52,55 @@ func UnmarshalPublicKey(data []byte) PublicKey {
 }
 
 func EncryptSymmetric(message []byte, key []byte) ([]byte, error) {
-	cipher, err := aes.NewCipher(key)
+	message = PKCS5Padding(message, aes.BlockSize)
+	aes_cipher, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]byte, len(message))
-	cipher.Encrypt(out, []byte(message))
-	return out, nil
+
+	IV := bytes.Repeat([]byte{byte(0)}, aes_cipher.BlockSize()) // TODO: make this random
+
+	ciphertext := make([]byte, len(message))
+	aes_cipher.Encrypt(ciphertext, []byte(message))
+	mode := cipher.NewCBCEncrypter(aes_cipher, IV)
+	mode.CryptBlocks(ciphertext, message)
+
+	return ciphertext, nil
 }
 
 func DecryptSymmetric(data []byte, key []byte) ([]byte, error) {
-	cipher, err := aes.NewCipher(key)
+	aes_cipher, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]byte, len(data))
-	cipher.Decrypt(out, []byte(data))
-	return out, nil
+
+	IV := bytes.Repeat([]byte{byte(0)}, aes_cipher.BlockSize()) // TODO: make this random
+
+	mode := cipher.NewCBCDecrypter(aes_cipher, IV)
+	mode.CryptBlocks(data, data)
+
+	return global.RemoveTrailingSpaces(data), err
 }
 
-func EncryptOnion(message []byte, tagId int, publicKey PublicKey, ckt global.Circuit) ([]byte, error) {
-	for i, e := range ckt {
-		message, err := EncryptSymmetric(message, e.SymmetricKey)
+// Padding is needed for AES because message length needs to be a multiple of block size.
+// This is from https://gist.github.com/yingray/57fdc3264b1927ef0f984b533d63abab
+func PKCS5Padding(message []byte, blockSize int) []byte {
+	padding := blockSize - len(message)%blockSize
+	padText := bytes.Repeat([]byte{byte('\x20')}, padding)
+
+	return append(message, padText...)
+}
+
+func EncryptOnion(message []byte, tagId int, publicKey PublicKey, revCkt *global.Circuit) ([]byte, error) {
+	// message is already encrypted with buddy's key
+	for i, e := range *revCkt {
 		var nextHopAddress string
 		var nextHopPort int = 0
-		if i < len(ckt)-1 {
-			nextHopAddress = ckt[i+1].Server.Host
-			nextHopPort = ckt[i+1].Server.Port
+
+		// Since the circuit is reversed, the next hop for each server is the previous circuit element
+		if i > 0 {
+			nextHopAddress = (*revCkt)[i-1].Server.Host
+			nextHopPort = (*revCkt)[i-1].Server.Port
 		}
 		cfd := &global.CircuitForwardingData{
 			Data:           message,
@@ -91,12 +115,17 @@ func EncryptOnion(message []byte, tagId int, publicKey PublicKey, ckt global.Cir
 			return nil, err
 		}
 
-		cfl := &global.CircuitSetupLayer{
-			Data:         bytes,
+		encryptedCfd, err := EncryptSymmetric(bytes, e.SymmetricKey)
+		if err != nil {
+			return nil, err
+		}
+
+		csl := &global.CircuitSetupLayer{
+			Data:         encryptedCfd,
 			EphPublicKey: MarshalPublicKey(publicKey),
 		}
 
-		bytes, err = json.Marshal(cfl)
+		bytes, err = json.Marshal(csl)
 		if err != nil {
 			return nil, err
 		}
@@ -107,16 +136,17 @@ func EncryptOnion(message []byte, tagId int, publicKey PublicKey, ckt global.Cir
 	return message, nil
 }
 
-func DecryptOnion(data []byte, ckt global.Circuit) ([]byte, error) {
+func DecryptOnion(data []byte, ckt *global.Circuit) ([]byte, error) {
 	var err error
-	for _, e := range ckt {
+	for _, e := range *ckt {
 		data, err = DecryptSymmetric(data, e.SymmetricKey)
 		if err != nil {
 			return nil, err
 		}
+
 	}
 
-	return data, err
+	return data, nil
 }
 
 func DecryptCircuitSetupLayer(data []byte, symmetricKey []byte) (*global.CircuitForwardingData, error) {
@@ -125,7 +155,10 @@ func DecryptCircuitSetupLayer(data []byte, symmetricKey []byte) (*global.Circuit
 		return nil, err
 	}
 
-	cfd := global.ReadCircuitForwardingData(decryptedData)
+	cfd, err := global.ReadCircuitForwardingData(decryptedData)
+	if err != nil {
+		return nil, err
+	}
 
 	return cfd, nil
 }

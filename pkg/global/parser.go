@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Client struct {
@@ -21,6 +22,10 @@ type Server struct {
 	Host  string `json:"host"`
 	Port  int    `json:"port"`
 	Layer int    `json:"layer"`
+}
+
+func (s *Server) Print() string {
+	return strconv.Itoa(s.Id)
 }
 
 func (g *Global) IsTerminal(s *Server) bool {
@@ -44,9 +49,9 @@ func (g *Global) Initialize() {
 }
 
 func (g *Global) FetchClientByPort(port int) (*Client, error) {
-	for _, client := range g.Clients {
+	for i, client := range g.Clients {
 		if client.Port == port {
-			return &client, nil
+			return &g.Clients[i], nil
 		}
 	}
 
@@ -54,9 +59,9 @@ func (g *Global) FetchClientByPort(port int) (*Client, error) {
 }
 
 func (g *Global) FetchServerByPort(port int) (*Server, error) {
-	for _, server := range g.Servers {
+	for i, server := range g.Servers {
 		if server.Port == port {
-			return &server, nil
+			return &g.Servers[i], nil
 		}
 	}
 
@@ -76,9 +81,9 @@ func (g *Global) FetchMaxLayers() int {
 
 func (g *Global) FetchServers(layer int) []*Server {
 	var layerServers []*Server
-	for _, server := range g.Servers {
-		if server.Layer == layer {
-			layerServers = append(layerServers, &server)
+	for i, s := range g.Servers {
+		if s.Layer == layer {
+			layerServers = append(layerServers, &g.Servers[i]) // fetch by index to get address
 		}
 	}
 
@@ -112,11 +117,19 @@ type CircuitForwardingData struct {
 	Tag            int    `json:"tag"`
 }
 
-func ReadCircuitForwardingData(data []byte) (cfd *CircuitForwardingData) {
-	cfd = &CircuitForwardingData{}
-	json.Unmarshal(data, cfd)
+func ReadCircuitForwardingData(data []byte) (*CircuitForwardingData, error) {
+	cfd := &CircuitForwardingData{}
+	err := json.Unmarshal(data, cfd)
+	if err != nil {
+		fmt.Printf("Failed to parse cfd: %+v\n", err)
+		return nil, err
+	}
 
-	return cfd
+	return cfd, nil
+}
+
+func RemoveTrailingSpaces(data []byte) []byte {
+	return []byte(strings.TrimSpace(string(data)))
 }
 
 type CircuitElement struct {
@@ -126,19 +139,27 @@ type CircuitElement struct {
 
 type Circuit []*CircuitElement
 
-func (c *Circuit) GetReversed() Circuit {
-	ckt := Circuit{}
+func (c *Circuit) GetReversed() *Circuit {
+	ckt := &Circuit{}
 	for i := len(*c) - 1; i >= 0; i-- {
-		ckt = append(ckt, (*c)[i])
+		*ckt = append(*ckt, (*c)[i])
 	}
 
 	return ckt
 }
 
+func (c *Circuit) Print() string {
+	out := "["
+	for _, e := range *c {
+		out += strconv.Itoa(e.Server.Id) + ", "
+	}
+	return out + "]"
+}
+
 type Buddy struct {
 	Id             int
 	SymmetricKey   []byte
-	Circuits       []Circuit
+	Circuits       []*Circuit
 	RNG            *rand.Rand
 	DeadDrop       []byte
 	TerminalServer *Server
@@ -160,7 +181,7 @@ func (g *Global) GenerateCircuit(b *Buddy) {
 	}
 	circuit = append(circuit, &CircuitElement{Server: b.TerminalServer}) // fixed terminal server
 
-	b.Circuits = append(b.Circuits, circuit)
+	b.Circuits = append(b.Circuits, &circuit)
 }
 
 func (g *Global) NewBuddy(id int, symmetricKey []byte) *Buddy {
