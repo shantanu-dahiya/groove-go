@@ -18,4 +18,4 @@ Client 2 is currently hard-coded to send a request to Client 1 to add each other
 # Notes
 There is a [dockerfile](.devcontainer/Dockerfile) included in the project which can spin up a container with the requirements. If not using docker, make sure that `go` is installed.
 
-[global.json](pkg/global/global.json) contains information about the servers and clients spun up by the system.
+[view.json](pkg/json/view.json) contains information about the servers and clients spun up by the system.

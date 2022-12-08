@@ -10,7 +10,7 @@ import (
 	"log"
 
 	"groove-go.nyu.edu/pkg/crypt"
-	"groove-go.nyu.edu/pkg/global"
+	parser "groove-go.nyu.edu/pkg/parser"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -25,8 +25,7 @@ type clientKey struct {
 
 type server struct {
 	pb.UnimplementedServerServer
-	g             global.Global
-	s             *global.Server
+	s             *parser.Server
 	publicKey     crypt.PublicKey
 	privateKey    crypt.PrivateKey
 	circuitKeyMap map[int][]byte
@@ -40,14 +39,11 @@ func (s *server) Initialize() error {
 	}
 	s.circuitKeyMap = make(map[int][]byte)
 
-	s.g = global.Global{}
-	s.g.Initialize()
-
 	return nil
 }
 
 func (s *server) CircuitSetup(ctx context.Context, req *pb.CircuitSetupRequest) (*pb.CircuitSetupResponse, error) {
-	csl := global.ReadCircuitSetupLayer(req.Message)
+	csl := parser.ReadCircuitSetupLayer(req.Message)
 	symmetricKey := crypt.ComputeSymmetricKey(crypt.UnmarshalPublicKey(csl.EphPublicKey), s.privateKey)
 	cfd, err := crypt.DecryptCircuitSetupLayer(csl.Data, symmetricKey)
 	if err != nil {
@@ -58,7 +54,7 @@ func (s *server) CircuitSetup(ctx context.Context, req *pb.CircuitSetupRequest) 
 	var returnData []byte
 
 	if cfd.NextHopPort != 0 {
-		nextHopServer, err := s.g.FetchServerByPort(cfd.NextHopPort)
+		nextHopServer, err := parser.FetchServerByPort(cfd.NextHopPort)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +118,7 @@ func main() {
 		println("Could not parse port number: %v", err)
 	}
 
-	server.s, err = server.g.FetchServerByPort(port)
+	server.s, err = parser.FetchServerByPort(port)
 	if err != nil {
 		log.Fatalf("Failed to fetch server with port %d: %v", port, err)
 	}

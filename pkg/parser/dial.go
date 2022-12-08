@@ -1,4 +1,4 @@
-package global
+package parser
 
 import (
 	"fmt"

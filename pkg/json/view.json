@@ -1,0 +1,70 @@
+{
+    "clients": [
+        {
+            "id": 1,
+            "host": "localhost",
+            "port": 10001
+        },
+        {
+            "id": 2,
+            "host": "localhost",
+            "port": 10002
+        }
+    ],
+    "service_providers": [
+        {
+            "id": 3,
+            "host": "localhost",
+            "port": 10003
+        },
+        {
+            "id": 4,
+            "host": "localhost",
+            "port": 10004
+        }
+    ],
+    "servers": [
+        {
+            "id": 5,
+            "host": "localhost",
+            "port": 10005,
+            "layer": 1,
+            "is_coordinator": true
+        },
+        {
+            "id": 6,
+            "host": "localhost",
+            "port": 10006,
+            "layer": 1,
+            "is_coordinator": false
+        },
+        {
+            "id": 7,
+            "host": "localhost",
+            "port": 10007,
+            "layer": 2,
+            "is_coordinator": false
+        },
+        {
+            "id": 8,
+            "host": "localhost",
+            "port": 10008,
+            "layer": 2,
+            "is_coordinator": false
+        },
+        {
+            "id": 9,
+            "host": "localhost",
+            "port": 10009,
+            "layer": 3,
+            "is_coordinator": false
+        },
+        {
+            "id": 10,
+            "host": "localhost",
+            "port": 10010,
+            "layer": 3,
+            "is_coordinator": false
+        }
+    ]
+}

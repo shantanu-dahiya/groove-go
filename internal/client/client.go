@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"groove-go.nyu.edu/pkg/crypt"
-	"groove-go.nyu.edu/pkg/global"
+	parser "groove-go.nyu.edu/pkg/parser"
 
 	"google.golang.org/grpc"
 
@@ -22,9 +22,8 @@ type client struct {
 	pb.UnimplementedClientServer
 	publicKey  crypt.PublicKey
 	privateKey crypt.PrivateKey
-	g          global.Global
-	buddies    []*global.Buddy
-	c          *global.Client
+	buddies    []*parser.Buddy
+	c          *parser.Client
 }
 
 func (c *client) Initialize() error {
@@ -43,20 +42,20 @@ func (c *client) SymmetricKeyGen(ctx context.Context, req *pb.SymmetricKeyGenReq
 func (c *client) addBuddy(clientId int, publicKey crypt.PublicKey) {
 	symmetricKey := crypt.ComputeSymmetricKey(publicKey, c.privateKey)
 
-	newBuddy := c.g.NewBuddy(clientId, symmetricKey)
+	newBuddy := parser.NewBuddy(clientId, symmetricKey)
 	for _, buddy := range c.buddies {
 		if buddy.Id == clientId {
-			buddy = newBuddy
+			// already added
+			log.Printf("Client %d already added as buddy", clientId)
 			return
 		}
-
 	}
 	// If new
 	c.buddies = append(c.buddies, newBuddy)
 }
 
 func (c *client) setUpCircuits(ctx context.Context) {
-	var firstHop *global.CircuitElement
+	var firstHop *parser.CircuitElement
 
 	for _, b := range c.buddies {
 		for _, circuit := range b.Circuits {
@@ -80,7 +79,7 @@ func (c *client) setUpCircuits(ctx context.Context) {
 			}
 
 			// Send onion encrypted setup request to first hop
-			data, err := crypt.EncryptOnion(b.DeadDrop, c.c.Id, c.publicKey, circuit.GetReversed())
+			data, err := crypt.EncryptOnion(b.DeadDrop, c.c.Id, c.publicKey, circuit)
 			if err != nil {
 				log.Fatalf("Could not onion encrypt circuit setup message at client %d", c.c.Id)
 			}
@@ -90,7 +89,7 @@ func (c *client) setUpCircuits(ctx context.Context) {
 			if err != nil {
 				log.Fatalf("Circuit setup failed for client %d: %v", c.c.Id, err)
 			}
-			defer serverConn.Close()
+			serverConn.Close()
 
 			returnedDeadDrop, err := crypt.DecryptOnion(res.Message, circuit)
 			if err != nil {
@@ -101,6 +100,20 @@ func (c *client) setUpCircuits(ctx context.Context) {
 		}
 	}
 }
+
+// TODO: split into two - send on two circuits
+// func (c *client) SendMessage(ctx context.Context, msg []byte, buddy *parser.Buddy) error {
+// 	encryptedMsg, err := crypt.EncryptSymmetric(msg, buddy.SymmetricKey)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	ckt := buddy.Circuits[0]
+
+// 	onionEncryptedMsg, err := crypt.EncryptOnionMessage(encryptedMsg, c.c.Id, c.publicKey, ckt.GetReversed())
+// 	if err != nil {
+// 		return err
+// 	}
+// }
 
 func main() {
 	// Setup log
@@ -120,9 +133,8 @@ func main() {
 	// Initialize client
 	client := client{}
 	client.Initialize()
-	client.g.Initialize()
 
-	client.c, err = client.g.FetchClientByPort(port)
+	client.c, err = parser.FetchClientByPort(port)
 	if err != nil {
 		log.Fatalf("Failed to get client with port: %d", port)
 	}
@@ -139,11 +151,12 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	// If client 2, add client 1 as buddy (happens symmetrically). TODO: Make this fixed?
+	// If client 2, add client 1 as buddy (happens symmetrically).
+	// TODO: Make this fixed?
 	if client.c.Id == 2 {
 		log.Print("Trying to call first client")
 		// Find client 1 and send symmetric key gen request
-		c1 := client.g.Clients[0]
+		c1 := parser.G.Clients[0]
 		log.Printf("Connecting to host=%s, port=%d", c1.Host, c1.Port)
 
 		client_1, conn := c1.Dial()
@@ -162,8 +175,9 @@ func main() {
 
 	go s.Serve(lis)
 
-	time.Sleep(time.Millisecond * 100) // sleep 100 ms to allow buddies to be added
+	time.Sleep(time.Millisecond * 200) // sleep 100 ms to allow buddies to be added
 
 	// Both clients set up their circuits
 	client.setUpCircuits(ctx)
+
 }
